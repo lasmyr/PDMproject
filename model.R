@@ -21,7 +21,7 @@ for (i in 1:ncol(data)) {
 }
 navals
 navalscols <-as.character(navals[,2])
-uselesscols <- colnames(data)[grepl("^X|timestamp|window", names(data))]
+uselesscols <- colnames(data)[grepl("^X|timestamp|window|user|problem", names(data))]
 dropcols <- append(navalscols, uselesscols)
 
 # Create Train, Validate, Test data
@@ -48,22 +48,34 @@ asda<-multiclass.roc(pred1_proba$A, as.numeric(valid$classe))
 
 # Random Forest, paramters tuned
 controlRf <- trainControl(method="cv", 5)
-model_complex <- train(classe ~., data = train, 
+train_x <- select(train, -classe)
+train_y <- select(train, classe)
+
+model_complex <- train(x = train_x, y = train_x,
                        method="rf", trControl=controlRf, 
                        importance=TRUE, ntree=100)
-pred2 <- predict(model_complex, newdata = valid)
+
+valid_x <- select(valid, -classe)
+pred2 <- predict(model_complex, newdata = valid_x)
 pred2_proba <- predict(model_complex, newdata = valid, type = "prob")
 confusionMatrix(pred2, valid$classe)
 multiclass.roc(pred2_proba$A, as.numeric(valid$classe))
 
+?train
 
+pred2_train <- predict(model_complex, newdata = train)
+pred2_train_prob <- predict(model_complex, newdata = train, type = "prob")
+confusionMatrix(pred2_train, train$classe)
+
+multiclass.roc(pred2_train$A, as.numeric(train$classe))
+barplot(table(pred2_train))
 
 # Predicting test set
-test_pred <- predict(model_complex, nedata = test)
-test_pred_proba <- predict(model_complex, nedata = test, type = "prob")
+test_pred <- predict(model_complex, newdata = test)
+test_pred_proba <- predict(model_complex, newdata = test, type = "prob")
 test_pred_result <- data.frame(test_pred, test_pred_proba)
 colnames(test_pred_result) <- c("prediction", "probability")
-test_pred_result
+View(test_pred_result)
 
 # Plot
 par(mfrow=c(2,2))

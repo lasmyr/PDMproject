@@ -42,7 +42,7 @@ for (i in 1:ncol(data)) {
   }
 }
 navalscols <-as.character(navals[,2])
-uselesscols <- colnames(data)[grepl("^X|timestamp|window", names(data))]
+uselesscols <- colnames(data)[grepl("^X|timestamp|window|user|problem", names(data))]
 dropcols <- append(navalscols, uselesscols)
 
 # Create Train, Validate, Test data
@@ -102,9 +102,9 @@ barplot(table(pred2), main = "Tuned Random Forest Predictions")
 As can be seen above, the random forest follows the distribution of the train data more than the simple decision tree. It is decided then that we will use the random forest to predict the test set.
 
 **Test Predictions**
-```{r, echo = FALSE}
-test_pred <- predict(model_complex, nedata = test)
-test_pred_proba <- predict(model_complex, nedata = test, type = "prob")
+```{r echo = TRUE, messages = FALSE}
+test_pred <- predict(model_complex, newdata = test)
+test_pred_proba <- predict(model_complex, newdata = test, type = "prob")
 test_pred_result <- data.frame(test_pred, test_pred_proba)
 colnames(test_pred_result) <- c("prediction", "probability")
 head(test_pred_result)
