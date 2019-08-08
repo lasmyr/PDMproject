@@ -1,0 +1,120 @@
+---
+title: "Practical Machine Learning Project"
+author: "Lasmyr Edullantes"
+date: "August 6, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Correct Exercise Form through Data Science
+The increase in available devices for activity tracking and the neo-culture of the quantified self movement has spurred research on human activity recognition to improve health and lifestyle. This study aims to successfully predict the kind of activity from the given sensor data. 
+
+To do this, I will train a simple tree-based model, then improve its accuracy by training a more complex tree model, the Random Forest. The final model will be tuned with 5 fold cross validation. Finally, the better model will be chosen based on accuracy, AUC, and prediction distribution. For this activity we will need the `caret`, `dplyr`, `randomForest` and the `pROC` libraries.
+
+```{r echo = FALSE, results = "hide", message = FALSE}
+library(caret)
+library(dplyr)
+library(randomForest)
+library(pROC)
+```
+
+## Preprocessing
+Before training, the data needed to be cleaned due to the large occurence of NA values. We drop these rows and other irrelevant rows --namely, the usernames, exported indexes, and timestamps.
+
+```{r}
+# data is read
+data <- read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0", ""))
+testdata <- read.csv("pml-testing.csv",na.strings = c("NA", "#DIV/0", ""))
+
+summary(data)
+```
+As we can see from above, there are many NA values that render columns unusable.
+
+```{r}
+# selecting all those with NA values
+navals <- data.frame(matrix(ncol = 2, nrow = 0))
+for (i in 1:ncol(data)) {
+  if(sum(is.na(data[,i]))>0) {
+    navals <- rbind(navals, data.frame(sum(is.na(data[,i])), colnames(data)[i]))
+  }
+}
+navalscols <-as.character(navals[,2])
+uselesscols <- colnames(data)[grepl("^X|timestamp|window", names(data))]
+dropcols <- append(navalscols, uselesscols)
+
+# Create Train, Validate, Test data
+data_clean<- select(data, -dropcols)
+test <- select(testdata, -dropcols)
+```
+
+Now that the data is clean we split the train data into train and validate data sets. We will use the `createDataPartision` function from the `caret` package.
+
+```{r}
+inTrain <- createDataPartition(y = data_clean$classe, p=0.7)[[1]]
+train <- data_clean[inTrain,]
+valid <- data_clean[-inTrain,]
+head(train)
+```
+
+## Modelling
+Now models will be made. I chose to focus on tree-based models because of its simplicity and interpretability, as well as its strength in classification. For the first model, a simple decision tree will be made.
+
+**Decision Tree**
+```{r message = FALSE}
+# Simple Decision Tree
+model_simple <- train(classe ~ ., data = train, method = "rpart")
+pred1 <- predict(model_simple, newdata = valid)
+pred1_proba <- predict(model_simple, newdata = valid, type = "prob")
+confusionMatrix(pred1, valid$classe)
+auc1 <- multiclass.roc(pred1_proba$A, as.numeric(valid$classe))
+auc1
+```
+As can be seen, the simple decision tree is not so great at predicting activity. To improve this, we will try a tuned Random Forest model.
+
+**Random Forest**
+
+```{r message = FALSE}
+# Tuned Random Forest
+controlRf <- trainControl(method="cv", 5)
+model_complex <- train(classe ~., data = train, 
+                       method="rf", trControl=controlRf, 
+                       importance=TRUE, ntree=100)
+pred2 <- predict(model_complex, newdata = valid)
+pred2_proba <- predict(model_complex, newdata = valid, type = "prob")
+confusionMatrix(pred2, valid$classe)
+auc2<-multiclass.roc(pred2_proba$A, as.numeric(valid$classe))
+auc2
+```
+As can be seen here, accuracy is significantly better than the Decision Tree, and the AUC score is similar.
+
+To further compare the two models, we can see how the predictions are distributed. The closer to the train data they are distributed, the better.
+
+```{r echo = FALSE}
+par(mfrow = c(1,3))
+barplot(table(train$classe), main = "Train Data")
+barplot(table(pred1), main = "Simple Decision Tree Predictions")
+barplot(table(pred2), main = "Tuned Random Forest Predictions")
+```
+
+As can be seen above, the random forest follows the distribution of the train data more than the simple decision tree. It is decided then that we will use the random forest to predict the test set.
+
+**Test Predictions**
+```{r, echo = FALSE}
+test_pred <- predict(model_complex, nedata = test)
+test_pred_proba <- predict(model_complex, nedata = test, type = "prob")
+test_pred_result <- data.frame(test_pred, test_pred_proba)
+colnames(test_pred_result) <- c("prediction", "probability")
+head(test_pred_result)
+```
+
+Since we don't have the response to validate the test set, we will just check if the distribution of the test predictions is similar to the validate set of the random forest, and the train data.
+
+```{r echo = FALSE}
+par(mfrow = c(1,3))
+barplot(table(train$classe), main = "Train Data")
+barplot(table(pred2), main = "Tuned Random Forest Predictions")
+barplot(table(test_pred), main = "Test Predictions")
+```
